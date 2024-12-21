@@ -36,11 +36,11 @@ interface OtherUserCursorsState {
 }
 
 export const useCursorStore = create<ClientCursorState>(set => ({
-  x: 0,
-  y: 0,
+  x: 100,
+  y: 100,
   color: 'blue',
-  originX: 0,
-  originY: 0,
+  originX: 100,
+  originY: 100,
   zoom: 1,
   setColor: color => set({ color }),
   setX: x => set({ x }),

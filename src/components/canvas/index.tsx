@@ -99,7 +99,7 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   } = useCursorStore();
   const { setPosition: setClickPosition, x: clickX, y: clickY, setMovecost } = useClickStore();
   const { cursors } = useOtherUserCursorsStore();
-  const { message, sendMessage } = useWebSocketStore();
+  const { sendMessage } = useWebSocketStore();
 
   /** References */
   const movementInterval = useRef<NodeJS.Timeout | null>(null);
@@ -169,9 +169,7 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
           dx * (tileSize - countFrame * tileSize),
           dy * (tileSize - countFrame * tileSize),
         ];
-        for (const canvas of currentRefs) {
-          canvas.style.transform = `translate(${translateX}px, ${translateY}px)`;
-        }
+        for (const canvas of currentRefs) canvas.style.transform = `translate(${translateX}px, ${translateY}px)`;
       }, movingSpeed / animationFrames);
     };
 
@@ -181,28 +179,19 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
         cancelCurrentMovement();
         return;
       }
-
       const path = paths[index];
       if (!path) return;
       const [dx, dy] = [Math.sign(path.x - currentPath.x), Math.sign(path.y - currentPath.y)];
 
-      if (dx === 1 && dy === 1) {
-        goDownRight();
-      } else if (dx === 1 && dy === -1) {
-        goUpRight();
-      } else if (dx === 1 && dy === 0) {
-        goright();
-      } else if (dx === -1 && dy === 1) {
-        goDownLeft();
-      } else if (dx === -1 && dy === -1) {
-        goUpLeft();
-      } else if (dx === -1 && dy === 0) {
-        goleft();
-      } else if (dx === 0 && dy === 1) {
-        godown();
-      } else if (dx === 0 && dy === -1) {
-        goup();
-      }
+      if (dx === 1 && dy === 1) goDownRight();
+      else if (dx === 1 && dy === -1) goUpRight();
+      else if (dx === 1 && dy === 0) goright();
+      else if (dx === -1 && dy === 1) goDownLeft();
+      else if (dx === -1 && dy === -1) goUpLeft();
+      else if (dx === -1 && dy === 0) goleft();
+      else if (dx === 0 && dy === 1) godown();
+      else if (dx === 0 && dy === -1) goup();
+
       currentPath = path;
       animateTileMoving(dx, dy);
       setPaths(paths.slice(index));
@@ -225,30 +214,24 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
 
   /** Click Event Handler */
   const handleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRefs.tileCanvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const [clickX, clickY] = [event.clientX - rect.left, event.clientY - rect.top];
+    const tileCanvas = canvasRefs.tileCanvasRef.current;
+    if (!tileCanvas) return;
+    const { left: rectLeft, top: rectTop } = tileCanvas.getBoundingClientRect();
+    const [clickX, clickY] = [event.clientX - rectLeft, event.clientY - rectTop];
 
     // Transform canvas coordinate to relative coordinate
     const [tileArrayX, tileArrayY] = [
       Math.floor(clickX / tileSize + tilePaddingWidth),
       Math.floor(clickY / tileSize + tilePaddingHeight),
     ];
-
     // Transform canvas coordinate to absolute coordinate
     const [tileX, tileY] = [Math.round(tileArrayX + startPoint.x), Math.round(tileArrayY + startPoint.y)];
-
     // Getting content of clicked tile
     const clickedTileContent = tiles[tileArrayY]?.[tileArrayX] ?? 'Out of bounds';
+    // Set click position
     setClickPosition(tileX, tileY, clickedTileContent);
 
-    let clickType: 'GENERAL_CLICK' | 'SPECIAL_CLICK' = 'GENERAL_CLICK';
-    if (event.buttons === 2) {
-      clickType = 'SPECIAL_CLICK';
-    }
-
+    const clickType = event.buttons === 2 ? 'SPECIAL_CLICK' : 'GENERAL_CLICK';
     if (clickType === 'GENERAL_CLICK' && !(clickedTileContent?.includes('F') || clickedTileContent?.includes('C'))) {
       moveCursor(tileArrayX, tileArrayY);
     }
@@ -277,25 +260,10 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
     if (!otherCursorsCtx) return;
     otherCursorsCtx.clearRect(0, 0, windowWidth, windowHeight);
     cursors.forEach(cursor => {
-      const x = cursor.x - cursorOriginX + tilePaddingWidth;
-      const y = cursor.y - cursorOriginY + tilePaddingHeight;
+      const [x, y] = [cursor.x - cursorOriginX + tilePaddingWidth, cursor.y - cursorOriginY + tilePaddingHeight];
       drawCursor(otherCursorsCtx, x * tileSize, y * tileSize, cursorColors[cursor.color]);
     });
   };
-
-  /** Handing Websocket message */
-  useEffect(() => {
-    if (!message) return;
-    try {
-      const { event } = JSON.parse(message);
-      switch (event) {
-        default:
-          break;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, [message]);
 
   /**
    * Find path using A* algorithm avoiding flags and move cursor in 8 directions
@@ -495,6 +463,7 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
           case 'FPURPLE0':
           case 'FPURPLE1': {
             const isEven = content.slice(-1) === '0' ? 0 : 1;
+            tileCtx.fillStyle = gradientObject.outer[isEven];
             // draw outline only for special clickable tile
             if (
               Math.abs(rowIndex - relativeY) <= 1 &&
@@ -504,9 +473,6 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
             ) {
               drawCursor(interactionCtx, x, y, '#0000002f', 0.5);
               tileCtx.fillStyle = 'white';
-            } else {
-              // draw outline only for special clickable tile
-              tileCtx.fillStyle = gradientObject.outer[isEven];
             }
             tileCtx.fill(tileEdgeVector);
 
@@ -527,8 +493,6 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
               // draw pole
               tileCtx.fillStyle = gradientObject.flag;
               tileCtx.fill(cachedVectorImages?.flag.pole as Path2D);
-
-              tileCtx.restore();
             }
             break;
           }
@@ -543,19 +507,16 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
           case '7':
           case '8':
           case 'B': {
-            tileCtx.fillStyle = gradientObject.outer[2];
+            tileCtx.fillStyle = gradientObject.outer[2]; // draw outline of tile
             tileCtx.fill(tileEdgeVector);
-
-            tileCtx.fillStyle = gradientObject.inner[2];
+            tileCtx.fillStyle = gradientObject.inner[2]; // draw inner tile
             tileCtx.fill(tileVector);
 
             /** describe ash */
             if (content === 'B') {
               tileCtx.scale(zoom / 4, zoom / 4);
-
               tileCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
               tileCtx.fill(cachedVectorImages?.boom.inner as Path2D); // draw inner path
-
               tileCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
               tileCtx.fill(cachedVectorImages?.boom.outer as Path2D); // draw outer path
             }
@@ -581,10 +542,8 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
       if (rowIndex === Math.floor((tiles.length * 3) / 10)) {
         // Draw my cursor
         drawCursor(interactionCtx, cursorCanvasX, cursorCanvasY, cursorColor);
-
         // Draw other users' cursor
         drawOtherUserCursors();
-
         // Describe clicked tile border
         interactionCtx.beginPath();
         interactionCtx.strokeStyle = cursorColor;
@@ -596,18 +555,16 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
           tileSize - borderPixel,
         );
         interactionCtx.closePath();
-
         // Draw path
         if (paths.length > 0) {
+          const [x, y] = [paths[0].x + compenX + 0.5, paths[0].y + compenY + 0.5];
           interactionCtx.beginPath();
           interactionCtx.strokeStyle = 'black';
           interactionCtx.lineWidth = tileSize / 6;
-          const [x, y] = [paths[0].x + compenX, paths[0].y + compenY];
-          interactionCtx.moveTo(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2); // start point
-
+          interactionCtx.moveTo(x * tileSize, y * tileSize); // start point
           paths.forEach(vector => {
-            const [x, y] = [vector.x + compenX, vector.y + compenY];
-            interactionCtx.lineTo(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2);
+            const [vectorX, vectorY] = [vector.x + compenX + 0.5, vector.y + compenY + 0.5];
+            interactionCtx.lineTo(vectorX * tileSize, vectorY * tileSize);
           });
           interactionCtx.stroke();
         }
@@ -619,27 +576,26 @@ const CanvasRenderer: React.FC<CanvasRendererProps> = ({
   /** Render */
   useEffect(() => {
     if (loading) {
-      // Set vector images
-      setCachedVectorImages({
-        cursor: new Path2D(cursorPaths),
-        flag: {
-          flag: new Path2D(flagPaths[0]),
-          pole: new Path2D(flagPaths[1]),
-        },
-        boom: {
-          inner: new Path2D(boomPaths[0]),
-          outer: new Path2D(boomPaths[1]),
-        },
-      });
-
       const lotteriaChabFont = new FontFace(
         'LOTTERIACHAB',
         "url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2302@1.0/LOTTERIACHAB.woff2') format('woff2')",
       );
 
       Promise.all([lotteriaChabFont.load()]).then(() => {
-        document.fonts.add(lotteriaChabFont);
+        // Set vector images
+        setCachedVectorImages({
+          cursor: new Path2D(cursorPaths),
+          flag: {
+            flag: new Path2D(flagPaths[0]),
+            pole: new Path2D(flagPaths[1]),
+          },
+          boom: {
+            inner: new Path2D(boomPaths[0]),
+            outer: new Path2D(boomPaths[1]),
+          },
+        });
         setLoading(false);
+        document.fonts.add(lotteriaChabFont);
       });
       return;
     }
